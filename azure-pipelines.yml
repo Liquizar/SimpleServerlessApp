@@ -1,0 +1,82 @@
+# Starter pipeline
+# Start with a minimal pipeline that you can customize to build and deploy your code.
+# Add steps that build, run tests, deploy, and more:
+# https://aka.ms/yaml
+
+trigger:
+- main
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+parameters:
+- name: DEPLOY_STAGE
+  displayName: 'Deploy Stage'
+  type: string
+  default: 'staging'
+  values:
+    - staging
+    - production
+
+- name: ARTIFACTS_BUCKET
+  displayName: 'Artifacts Bucket'
+  type: string
+  default: 'my-artifacts-bucket'
+
+- name: ARTIFACTS_PREFIX
+  displayName: 'Artifacts Prefix'
+  type: string
+  default: 'my-prefix'
+
+stages:
+- stage: Test
+  displayName: 'Unit Test'
+  jobs:
+  - job: Unit_Test
+    displayName: 'Unit Test'
+    steps:
+    - script: |
+        npm i -g recursive-install
+        npm-recursive-install --rootDir=src
+        cd src/books/create
+        npm test
+        cd ../../..
+        cd src/books/get-all
+        npm test
+      displayName: 'Run unit tests'
+      workingDirectory: '$(Build.SourcesDirectory)'
+
+- stage: Build
+  displayName: 'Package Application'
+  jobs:
+  - job: Package_Application
+    displayName: 'Package Application'
+    steps:
+    - task: NodeTool@0
+      inputs:
+        versionSpec: '14.x'
+      displayName: 'Install Node.js'
+
+    - script: |
+        npm install -g aws-cdk
+        npm install -g recursive-install
+        npm-recursive-install --rootDir=src
+        sam build
+        sam package --s3-bucket azure-assignment-bucket --s3-prefix booking-app --output-template-file template.yml
+      displayName: 'Build and Package Application'
+      workingDirectory: '$(Build.SourcesDirectory)'
+
+# - stage: Deploy
+#   displayName: 'Deploy'
+#   jobs:
+#   - job: Deploy_Stack
+#     displayName: 'Deploy Stack'
+#     steps:
+#     - task: AWSCLI@1
+#       inputs:
+#         awsCredentials: 'AWS_SERVICE_CONNECTION_NAME' # Configure your AWS service connection here
+#         regionName: 'us-east-1'
+#         command: 'cloudformation deploy'
+#         arguments: '--template-file template.yml --stack-name $(DEPLOY_STAGE) --parameter-overrides Stage=$(DEPLOY_STAGE) --capabilities CAPABILITY_IAM'
+#       displayName: 'Deploy Stack'
+#     condition: succeeded('Build')
